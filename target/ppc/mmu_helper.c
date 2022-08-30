@@ -1112,9 +1112,19 @@ static void remove_476_bolted_entry(CPUPPCState *env, uint32_t index)
  * |               |11|10| 9| 8|  |  |  |  |
  * |               | 7| 6| 5| 4| 3| 2| 1| 0|
  */
-static inline uint8_t calc_476_tlb_entry_index(target_ulong addr, uint32_t tid)
+static inline uint8_t calc_476_tlb_entry_index(target_ulong addr, uint32_t tid, uint32_t size)
 {
-    return (tid & 0xff) ^ (addr & 0xff) ^ ((addr >> 4) & 0xf0) ^ ((addr >> 12) & 0xff);
+    switch (size) {
+    case 0x00: return  ((tid & 0xff) ^ ((addr & 0xff000000) >> 24) ^ ((addr & 0xf00000) >> 16) ^ ((addr & 0xff000) >> 12));
+    case 0x01: return  ((tid & 0xff) ^ ((addr & 0xff000000) >> 24) ^ ((addr & 0xC00000) >> 16) ^ ((addr & 0x3FC000) >> 14));
+    case 0x03: return  ((tid & 0xff) ^ ((addr & 0xff000000) >> 24) ^ ((addr & 0xff0000) >> 16));
+    case 0x07: return  ((tid & 0xff) ^ ((addr & 0xf0000000) >> 24) ^ ((addr & 0xff00000) >> 20));
+    case 0x0f: return  ((tid & 0xff) ^ ((addr & 0xff000000) >> 24));
+    case 0x1f: return  ((tid & 0xff) ^ ((addr & 0xf0000000) >> 24));
+    case 0x3f: return  ((tid & 0xff) ^ ((addr & 0xC0000000) >> 24));
+    default: return -1;
+    }
+    //return (tid & 0xff) ^ (addr & 0xff) ^ ((addr >> 4) & 0xf0) ^ ((addr >> 12) & 0xff);
 }
 
 /* Linearise ppc tlb representation in qemu internal tlb array */
@@ -1182,7 +1192,8 @@ void helper_476_tlbwe(CPUPPCState *env, uint32_t word, target_ulong entry,
 
         tid = env->spr[SPR_440_MMUCR] & PPC476_MMUCR_STID_MASK;
 
-        index = calc_476_tlb_entry_index(addr >> PPC476_TLB_EPN_SHIFT, tid);
+        index = calc_476_tlb_entry_index(addr, tid, calc_476_page_size_to_tlb(size));
+        //index = calc_476_tlb_entry_index(addr >> PPC476_TLB_EPN_SHIFT, tid);
 
         if (entry & PPC476_TLB_BOLTED_ENTRY) {
             way = 0;
